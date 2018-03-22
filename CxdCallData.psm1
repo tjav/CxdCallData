@@ -92,6 +92,13 @@ function Get-CxdCallData{
         }catch{
             Write-Warning -Message "Unable to set the WinRM Network Delay. This may be due to User Account Control settings. If you're not encountering timeouts you can safely ignore this warning, otherwise try running the script as an elevated user (Administrator)."
         }
+
+        #remove all files and directories from the save path
+        if ($KeepExistingReports){
+            Write-Warning -Message "The -KeepExistingReports switch is being deprecated in favor of people removing their own content by other means."
+        }
+
+        Write-Host "Check out https://github.com/jasonshave/cxdcalldata for the latest readme and opportunity to improve this module. Community contribution has made this module considerably better so thanks to everyone who has contributed!" -ForegroundColor Green
     }
 
     process {
@@ -864,16 +871,6 @@ function Set-CxdSavePath{
         begin{
             #trim trailing backslash in case user entered it
             $ReportSavePath = $ReportSavePath.TrimEnd("\")
-
-            #remove all files and directories from the save path
-            if (!$KeepExistingReports){
-                try{
-                    Write-Verbose -Message "Removing existing files from: $($ReportSavePath)"
-                    Get-ChildItem -Path $ReportSavePath | Remove-Item -Recurse -ErrorAction SilentlyContinue
-                }catch{
-                    throw
-                }
-            }
         }
         process{
             #create directory
