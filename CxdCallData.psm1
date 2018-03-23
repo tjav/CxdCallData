@@ -57,8 +57,8 @@ function Get-CxdCallData{
     [cmdletbinding()]
         Param
         (
-            [Parameter(Mandatory=$true)][int]$NumberOfDaysToSearch,
-            [Parameter(Mandatory=$true)][string]$ReportSavePath,
+            [Parameter(ParameterSetName="all",Mandatory=$true)][int]$NumberOfDaysToSearch,
+            [Parameter(ParameterSetName="all",Mandatory=$true)][string]$ReportSavePath,
 
             [Parameter(ParameterSetName="all",Mandatory=$false)][string]$OverrideAdminDomain,
             [Parameter(ParameterSetName="all",Mandatory=$false)][PSCredential]$Credential,
