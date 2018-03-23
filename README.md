@@ -20,4 +20,4 @@ To update the module once it's been installed:
 For a detailed description see help from 'get-help CxdCallData'
 
 1. Removed functionality in the **-KeepExistingReports** switch as some people were using "D:\" as the path for reports. Omitting this switch would wipe out all files on the drive recursively. 
-2. Updated Github MD.
+2. Resolved ParameterSet issue causing errors when some parameters were omitted. 
