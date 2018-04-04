@@ -26,7 +26,7 @@ function Get-CxdCallData{
         For the CSV file, the following formats are supported:
 
         Firstname,Lastname,Userprincipalname
-        Jason,Shave,jassha@microsoft.com
+        Jason,Shave,jason.shave@microsoft.com
 
         or
 
@@ -51,12 +51,11 @@ function Get-CxdCallData{
 
         You must be a Skype for Business Administrator in the Office 365 tenant to run the commands in this script. This script is provided without warranty. Although the commands and functions within this script do not make changes to your Office 365 tenant, you agree to use it at your own risk.
 
-        Created by: Jason Shave (jassha@microsoft.com)
+        Created by: Jason Shave (jason.shave@microsoft.com)
     #>
 
     [cmdletbinding()]
-        Param
-        (
+        Param (
             [Parameter(ParameterSetName="all",Mandatory=$true)][int]$NumberOfDaysToSearch,
             [Parameter(ParameterSetName="all",Mandatory=$true)][string]$ReportSavePath,
 
@@ -86,90 +85,90 @@ function Get-CxdCallData{
             [Parameter(ParameterSetName="subnet",Mandatory=$true)][Net.IPAddress]$subnetMask
         )
 
-    begin {
-        try{
-            Set-WinRMNetworkDelayMS -value "60000" -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -ErrorVariable WinRMError
-        }catch{
-            Write-Warning -Message "Unable to set the WinRM Network Delay. This may be due to User Account Control settings. If you're not encountering timeouts you can safely ignore this warning, otherwise try running the script as an elevated user (Administrator)."
+        begin {
+            try{
+                Set-WinRMNetworkDelayMS -value "60000" -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -ErrorVariable WinRMError
+            }catch{
+                Write-Warning -Message "Unable to set the WinRM Network Delay. This may be due to User Account Control settings. If you're not encountering timeouts you can safely ignore this warning, otherwise try running the script as an elevated user (Administrator)."
+            }
+
+            #remove all files and directories from the save path
+            if ($KeepExistingReports){
+                Write-Warning -Message "The -KeepExistingReports switch is being deprecated in favor of people removing their own content by other means."
+            }
+
+            Write-Host "Check out https://github.com/jasonshave/cxdcalldata for the latest readme and opportunity to improve this module. Community contribution has made this module considerably better so thanks to everyone who has contributed!" -ForegroundColor Green
         }
 
-        #remove all files and directories from the save path
-        if ($KeepExistingReports){
-            Write-Warning -Message "The -KeepExistingReports switch is being deprecated in favor of people removing their own content by other means."
+        process {
+            $startTime = (Get-Date).AddDays(-$NumberOfDaysToSearch) #note the .AddDays is subtracting the number of days to search
+            $endTime = Get-Date
+            $global:sessionStartTime = $null
+            $numBuckets = 0
+            $numUsers = 0
+            $enabledUsers = $null
+            $arrNotUsingSkype = $null
+
+            if (!$Credential){
+                $Credential = Get-Credential -Message "Authenticate to Skype for Business Online"
+            }
+            #create initial SFBO Connection
+            Invoke-CxdSkypeOnlineConnection
+
+            #define the save path for reports
+            $ReportSavePath = Set-CxdSavePath
+            
+            #process CSV file to strip out invalid entries and make sure formatting is correct
+            if ($CsvFileWithUsers){
+                $csvValidatedUsers = ProcessCsv
+            }
+
+            try{
+                [array]$enabledUsers = ProcessSkypeOnlineUsers 
+            }catch{
+                Write-Warning -Message "Exception encounterd while getting users. Attempting to remove the PowerShell PSSession and will retry..."
+                Invoke-CxdSkypeOnlineConnection -RepairPSSession
+                [array]$enabledUsers = ProcessSkypeOnlineUsers
+            }
+            
+            #exit if no users to process
+            if (!$enabledUsers.Count){
+                Write-Warning -Message "We didn't find any users matching your query. Exiting..."
+                break
+            }
+
+            #get all tenant domains to help parse federated communications report
+            $tenantDomains = Get-CsTenant | Select-Object DomainUrlMap
+            $tenantDomains = $tenantDomains.DomainUrlMap | Foreach-Object {"*" + $_ + "*"}
+            $tenantDomains += "*.lync.com*"
+            
+            #calculate users and buckets
+            $userTotal = $enabledUsers.Count
+            $userBuckets = [math]::Ceiling($userTotal /10)
+            $arrUserBuckets = @{}
+
+            #create users and put them into buckets
+            Write-Verbose -Message "Putting $($enabledUsers.Count) users into buckets..."
+            $count = 0
+            $enabledUsers | ForEach-Object {
+                $arrUserBuckets[$count % $userBuckets] += @($_)
+                $count++
+            }
+            Write-Verbose -Message "Placed $($enabledUsers.Count) users into $($arrUserBuckets.Count) bucket(s)."
+
+            #process all discovered users into buckets
+            $pStart = Get-Date
+            $arrUserBuckets | ProcessBuckets
+
+            #process federated summary data
+            FederatedCommunicationsSummary
+            #UserSummary
         }
-
-        Write-Host "Check out https://github.com/jasonshave/cxdcalldata for the latest readme and opportunity to improve this module. Community contribution has made this module considerably better so thanks to everyone who has contributed!" -ForegroundColor Green
-    }
-
-    process {
-        $startTime = (Get-Date).AddDays(-$NumberOfDaysToSearch) #note the .AddDays is subtracting the number of days to search
-        $endTime = Get-Date
-        $global:sessionStartTime = $null
-        $numBuckets = 0
-        $numUsers = 0
-        $enabledUsers = $null
-        $arrNotUsingSkype = $null
-
-        if (!$Credential){
-            $Credential = Get-Credential -Message "Authenticate to Skype for Business Online"
-        }
-        #create initial SFBO Connection
-        Invoke-CxdSkypeOnlineConnection
-
-        #define the save path for reports
-        $ReportSavePath = Set-CxdSavePath
-        
-        #process CSV file to strip out invalid entries and make sure formatting is correct
-        if ($CsvFileWithUsers){
-            $csvValidatedUsers = ProcessCsv
-        }
-
-        try{
-            [array]$enabledUsers = ProcessSkypeOnlineUsers 
-        }catch{
-            Write-Warning -Message "Exception encounterd while getting users. Attempting to remove the PowerShell PSSession and will retry..."
-            Invoke-CxdSkypeOnlineConnection -RepairPSSession
-            [array]$enabledUsers = ProcessSkypeOnlineUsers
-        }
-        
-        #exit if no users to process
-        if (!$enabledUsers.Count){
-            Write-Warning -Message "We didn't find any users matching your query. Exiting..."
-            break
-        }
-
-        #get all tenant domains to help parse federated communications report
-        $tenantDomains = Get-CsTenant | Select-Object DomainUrlMap
-        $tenantDomains = $tenantDomains.DomainUrlMap | Foreach-Object {"*" + $_ + "*"}
-        $tenantDomains += "*.lync.com*"
-        
-        #calculate users and buckets
-        $userTotal = $enabledUsers.Count
-        $userBuckets = [math]::Ceiling($userTotal /10)
-        $arrUserBuckets = @{}
-
-        #create users and put them into buckets
-        Write-Verbose -Message "Putting $($enabledUsers.Count) users into buckets..."
-        $count = 0
-        $enabledUsers | ForEach-Object {
-            $arrUserBuckets[$count % $userBuckets] += @($_)
-            $count++
-        }
-        Write-Verbose -Message "Placed $($enabledUsers.Count) users into $($arrUserBuckets.Count) bucket(s)."
-
-        #process all discovered users into buckets
-        $pStart = Get-Date
-        $arrUserBuckets | ProcessBuckets
-
-        #process federated summary data
-        FederatedCommunicationsSummary
-        #UserSummary
-    }
     
-    end{
-        Write-Verbose -Message "Removing PowerShell Session..."
-        Get-PSSession | Remove-PSSession
-    }   
+        end{
+            Write-Verbose -Message "Removing PowerShell Session..."
+            Get-PSSession | Remove-PSSession
+        }   
 }
 
 function ProcessBuckets{
@@ -184,7 +183,7 @@ function ProcessBuckets{
             #progress bar for total buckets
             $numBuckets++
             $bId = 1
-            $bActivity = "Processing " + $enabledUsers.Count + " users into " + $arrUserBuckets.Count + " buckets."
+            $bActivity = "Processing " + $enabledUsers.Count + " users in " + $arrUserBuckets.Count + " buckets."
             $bStatus = "Bucket #" + $numBuckets
             [int]$bPercentComplete = ($numBuckets/($arrUserBuckets.Count + 1)) * 100
             $bCurrentOperation = [string]$bPercentComplete + "% Complete"
