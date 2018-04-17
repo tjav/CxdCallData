@@ -109,9 +109,9 @@ function Get-CxdCallData{
             $enabledUsers = $null
             $arrNotUsingSkype = $null
 
-            if (!$Credential){
-                $Credential = Get-Credential -Message "Authenticate to Skype for Business Online"
-            }
+           # if (!$Credential){
+               # $Credential = Get-Credential -Message "Authenticate to Skype for Business Online"
+           # }
             #create initial SFBO Connection
             Invoke-CxdSkypeOnlineConnection
 
